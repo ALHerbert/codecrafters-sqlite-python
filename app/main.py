@@ -35,9 +35,8 @@ class PageHeader:
 
         return instance
 
-
-if command == ".dbinfo":
-    with open(database_file_path, "rb") as database_file:
+def generate_schema_rows(database_path):
+    with open(database_path, "rb") as database_file:
         database_file.seek(100)  # Skip the header section
         page_header = PageHeader.parse_from(database_file)
         database_file.seek(100+8)  # Skip the database header & b-tree page header, get to the cell pointer array
@@ -62,10 +61,22 @@ if command == ".dbinfo":
                 'sql': record[4],
             })
 
-        # You can use print statements as follows for debugging, they'll be visible when running tests.
+        return sqlite_schema_rows
+
+if command == ".dbinfo":
+        sqlite_schema_rows = generate_schema_rows(database_file_path)
+       # You can use print statements as follows for debugging, they'll be visible when running tests.
         print("Logs from your program will appear here!")
 
         # Uncomment this to pass the first stage
         print(f"number of tables: {len(sqlite_schema_rows)}")
+elif ".tables":
+    sqlite_schema_rows = generate_schema_rows(database_file_path)
+    output = ""
+    for row in sqlite_schema_rows:
+        tbl_name = row['tbl_name'].decode()
+        if tbl_name != 'sqlite_sequence':
+            output += tbl_name + ' '
+    print(output)
 else:
     print(f"Invalid command: {command}")
