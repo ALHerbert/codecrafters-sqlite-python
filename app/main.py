@@ -2,7 +2,8 @@ import sys
 
 from dataclasses import dataclass
 
-# import sqlparse - available if you need it!
+import sqlparse 
+from sqlparse.sql import IdentifierList, Function, Identifier
 
 from .record_parser import parse_record
 from .varint_parser import parse_varint
@@ -83,9 +84,24 @@ elif command == ".tables":
             output += tbl_name + ' '
     print(output)
 elif command.startswith('select'):
+    sql_tokens = sqlparse.parse(command)[0].tokens
+
+
+
     table = command.split()[-1]
     sqlite_schema_rows = generate_schema_rows(database_file_path)
     table_record = [record for record in sqlite_schema_rows if record['tbl_name'].decode() == table][0]
+    table_sql = table_record['sql'].decode()
+
+    open_paren = table_sql.find('(')
+    table_sql = table_sql[open_paren + 1:len(table_sql) - 1].strip().split(',')
+    columns = []
+    for column_def in table_sql:
+        column_name = column_def.strip().split()[0]
+        columns.append(column_name)
+
+    column_count = len(columns) 
+
     page_size = get_page_size(database_file_path)
 
     with open(database_file_path, "rb") as database_file:
@@ -95,23 +111,31 @@ elif command.startswith('select'):
         database_file.seek(page_start + 8) # move to the cell pointer array on the current page
         cell_pointers = [int.from_bytes(database_file.read(2), "big") for _ in range(page_header.number_of_cells)]
 
-        '''
         table_rows = []
         for cell_pointer in cell_pointers:
             database_file.seek(page_start + cell_pointer)
             _number_of_bytes_in_payload = parse_varint(database_file)
             rowid = parse_varint(database_file)
-            record = parse_record(database_file, 3)
+            record = parse_record(database_file, column_count)
 
-            # Table contains columns: type, name, tbl_name, rootpage, sql
-            table_rows.append({
-                'type': record[0],
-                'name': record[1],
-                'tbl_name': record[2],
-                'rootpage': record[3],
-                'sql': record[4],
-            })
-        ''' 
-        print(len(cell_pointers))
+            row_dict = {}
+            for i, column in enumerate(columns):
+                if column == 'id':
+                    row_dict[column] = rowid
+                else:
+                    row_dict[column] = record[i]
+            table_rows.append(row_dict)
+
+        identifiers = sql_tokens[2] 
+
+        if type(identifiers) == Function:
+            # count
+            print(len(cell_pointers))
+        elif type(identifiers) == Identifier:
+            for row in table_rows:
+                print(row[identifiers.value].decode())
+        elif type(identifiers) == IdentifierList:  
+            # select statement with columsn
+            print(table_rows)
 else:
     print(f"Invalid command: {command}")
