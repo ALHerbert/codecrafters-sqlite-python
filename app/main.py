@@ -136,6 +136,20 @@ elif command.startswith('select'):
                 print(row[identifiers.value].decode())
         elif type(identifiers) == IdentifierList:  
             # select statement with columsn
-            print(table_rows)
+
+            # get the names of all the columns
+            columns_to_return = []
+            for token in identifiers:
+                if type(token) == Identifier:
+                    columns_to_return.append(token.value)
+
+            # construct a row
+            for row in table_rows:
+                output = ""
+                for col in columns_to_return:
+                    output += row[col].decode()
+                    output += '|'
+                output = output[:-1]
+                print(output)
 else:
     print(f"Invalid command: {command}")
