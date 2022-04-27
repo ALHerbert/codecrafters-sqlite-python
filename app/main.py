@@ -35,14 +35,19 @@ class PageHeader:
 
         return instance
 
+def get_page_size(database_path):
+    with open(database_path, "rb") as database_file:
+        database_file.seek(16)
+        page_size = int.from_bytes(database_file.read(2), "big")
+        return page_size
+
 def generate_schema_rows(database_path):
     with open(database_path, "rb") as database_file:
         database_file.seek(100)  # Skip the header section
         page_header = PageHeader.parse_from(database_file)
         database_file.seek(100+8)  # Skip the database header & b-tree page header, get to the cell pointer array
-
+        
         cell_pointers = [int.from_bytes(database_file.read(2), "big") for _ in range(page_header.number_of_cells)]
-
         sqlite_schema_rows = []
 
         # Each of these cells represents a row in the sqlite_schema table.
@@ -64,13 +69,12 @@ def generate_schema_rows(database_path):
         return sqlite_schema_rows
 
 if command == ".dbinfo":
-        sqlite_schema_rows = generate_schema_rows(database_file_path)
-       # You can use print statements as follows for debugging, they'll be visible when running tests.
-        print("Logs from your program will appear here!")
-
-        # Uncomment this to pass the first stage
-        print(f"number of tables: {len(sqlite_schema_rows)}")
-elif ".tables":
+    sqlite_schema_rows = generate_schema_rows(database_file_path)
+   # You can use print statements as follows for debugging, they'll be visible when running tests.
+    print("Logs from your program will appear here!")
+    # Uncomment this to pass the first stage
+    print(f"number of tables: {len(sqlite_schema_rows)}")
+elif command == ".tables":
     sqlite_schema_rows = generate_schema_rows(database_file_path)
     output = ""
     for row in sqlite_schema_rows:
@@ -78,5 +82,36 @@ elif ".tables":
         if tbl_name != 'sqlite_sequence':
             output += tbl_name + ' '
     print(output)
+elif command.startswith('SELECT'):
+    table = command.split()[-1]
+    sqlite_schema_rows = generate_schema_rows(database_file_path)
+    table_record = [record for record in sqlite_schema_rows if record['tbl_name'].decode() == table][0]
+    page_size = get_page_size(database_file_path)
+
+    with open(database_file_path, "rb") as database_file:
+        page_start = table_record['rootpage'] * page_size - page_size
+        database_file.seek(page_start)
+        page_header = PageHeader.parse_from(database_file)
+        database_file.seek(page_start + 8) # move to the cell pointer array on the current page
+        cell_pointers = [int.from_bytes(database_file.read(2), "big") for _ in range(page_header.number_of_cells)]
+
+        '''
+        table_rows = []
+        for cell_pointer in cell_pointers:
+            database_file.seek(page_start + cell_pointer)
+            _number_of_bytes_in_payload = parse_varint(database_file)
+            rowid = parse_varint(database_file)
+            record = parse_record(database_file, 3)
+
+            # Table contains columns: type, name, tbl_name, rootpage, sql
+            table_rows.append({
+                'type': record[0],
+                'name': record[1],
+                'tbl_name': record[2],
+                'rootpage': record[3],
+                'sql': record[4],
+            })
+        ''' 
+        print(len(cell_pointers))
 else:
     print(f"Invalid command: {command}")
