@@ -9,7 +9,7 @@ from .varint_parser import parse_varint
 
 
 database_file_path = sys.argv[1]
-command = sys.argv[2].strip()
+command = sys.argv[2]
 
 
 @dataclass(init=False)
@@ -82,7 +82,7 @@ elif command == ".tables":
         if tbl_name != 'sqlite_sequence':
             output += tbl_name + ' '
     print(output)
-elif command.startswith('SELECT'):
+elif command.startswith('select'):
     table = command.split()[-1]
     sqlite_schema_rows = generate_schema_rows(database_file_path)
     table_record = [record for record in sqlite_schema_rows if record['tbl_name'].decode() == table][0]
