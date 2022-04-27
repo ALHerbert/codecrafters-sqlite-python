@@ -9,7 +9,7 @@ from .varint_parser import parse_varint
 
 
 database_file_path = sys.argv[1]
-command = sys.argv[2]
+command = sys.argv[2].strip()
 
 
 @dataclass(init=False)
