@@ -24,7 +24,7 @@ def get_tablename(tokens):
 
     from_clause_reached = False 
     for token in tokens:
-        if token.value == 'from':
+        if token.value.lower() == 'from':
             from_clause_reached = True
         if from_clause_reached:
             if type(token) == Identifier:
@@ -173,7 +173,7 @@ def get_table_rows(database_file, page_start, page_header, sql_tokens, column_co
                 if rowid == int(where_condition[1]):
                     table_rows.append(row_dict)
             else:
-                if row_dict[where_condition[0]].decode() == where_condition[1].strip('"').strip("'"):
+                if row_dict[where_condition[0]] and row_dict[where_condition[0]].decode() == where_condition[1].strip('"').strip("'"):
                     table_rows.append(row_dict)
         else:
             table_rows.append(row_dict)
@@ -206,7 +206,7 @@ elif command == ".tables":
         if tbl_name != 'sqlite_sequence':
             output += tbl_name + ' '
     print(output)
-elif command.startswith('select'):
+elif command.startswith('select') or command.startswith('SELECT'):
     sql_tokens = sqlparse.parse(command)[0].tokens
 
     table = get_tablename(sql_tokens)
@@ -229,7 +229,10 @@ elif command.startswith('select'):
             print(len(table_rows))
         elif type(identifiers) == Identifier:
             for row in table_rows:
-                print(row[identifiers.value].decode())
+                if type(row[identifiers.value]) == int:
+                    print(str(row[identifiers.value]))
+                else:
+                    print(row[identifiers.value].decode())
         elif type(identifiers) == IdentifierList:  
             # select statement with columsn
 
