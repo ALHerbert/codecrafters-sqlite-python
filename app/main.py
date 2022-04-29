@@ -208,15 +208,6 @@ elif command == ".tables":
             output += tbl_name + ' '
     print(output)
 elif command.startswith('select'):
-    # parse the sql command
-    # if select statement
-    # get the columns of the table
-    # get all the rows in the table
-    # check the exact nature of the query. is function count? or regular sql query?
-    # if count, return len of rows
-    # if no where clause, output results
-    # if where clause, then filter results
-
     sql_tokens = sqlparse.parse(command)[0].tokens
 
     table = get_tablename(sql_tokens)
