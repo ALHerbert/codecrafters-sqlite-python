@@ -129,8 +129,7 @@ def read_pages(database_file, page_start, sql_tokens, column_count, page_size):
         table_rows.extend(read_pages(database_file, right_page_number, sql_tokens, column_count, page_size))
 
     else:
-        print(page_header.page_type)
-        print("Unknown page type!")
+        print("Unknown page type!", page_header.page_type)
 
     return table_rows
 
