@@ -8,6 +8,12 @@ from sqlparse.sql import IdentifierList, Function, Identifier, Comparison, Where
 from .record_parser import parse_record
 from .varint_parser import parse_varint
 
+# constants
+INTERIOR_INDEX_PAGE = 2
+INTERIOR_TABLE_PAGE = 5
+LEAF_INDEX_PAGE = 10
+LEAF_TABLE_PAGE = 13
+
 
 database_file_path = sys.argv[1]
 command = sys.argv[2]
@@ -57,6 +63,7 @@ class PageHeader:
     number_of_cells: int
     start_of_content_area: int
     fragmented_free_bytes: int
+    right_most_pointer: int
 
     @classmethod
     def parse_from(cls, database_file):
@@ -70,6 +77,9 @@ class PageHeader:
         instance.number_of_cells = int.from_bytes(database_file.read(2), "big")
         instance.start_of_content_area = int.from_bytes(database_file.read(2), "big")
         instance.fragmented_free_bytes = int.from_bytes(database_file.read(1), "big")
+
+        if instance.page_type == INTERIOR_TABLE_PAGE:
+            instance.right_most_pointer = int.from_bytes(database_file.read(4), "big")
 
         return instance
 
@@ -105,6 +115,71 @@ def generate_schema_rows(database_path):
             })
 
         return sqlite_schema_rows
+
+def read_pages(database_file, page_start, sql_tokens, column_count, page_size):
+    database_file.seek(page_start)
+    page_header = PageHeader.parse_from(database_file)
+
+    table_rows = []
+    if page_header.page_type == LEAF_TABLE_PAGE:
+        table_rows.extend(get_table_rows(database_file, page_start, page_header, sql_tokens, column_count, page_size))
+    elif page_header.page_type == INTERIOR_TABLE_PAGE:
+        table_rows.extend(read_interior_page(database_file, page_start, page_header, sql_tokens, column_count, page_size))
+        right_page_number = page_header.right_most_pointer * page_size - page_size
+        table_rows.extend(read_pages(database_file, right_page_number, sql_tokens, column_count, page_size))
+
+    else:
+        print(page_header.page_type)
+        print("Unknown page type!")
+
+    return table_rows
+
+def read_interior_page(database_file, page_start, page_header, sql_tokens, column_count, page_size):
+    database_file.seek(page_start+12)
+    cell_pointers = [int.from_bytes(database_file.read(2), "big") for _ in range(page_header.number_of_cells)]
+
+    table_rows = []
+    for cell_pointer in cell_pointers:
+        database_file.seek(page_start + cell_pointer)
+        page_number = int.from_bytes(database_file.read(4), "big") # left pointer
+        _varint_integer_key = parse_varint(database_file)
+
+        new_page_start = page_number * page_size - page_size
+        table_rows.extend(read_pages(database_file, new_page_start, sql_tokens, column_count, page_size)) 
+
+    return table_rows
+
+def get_table_rows(database_file, page_start, page_header, sql_tokens, column_count, page_size):
+    # begin function - page start, database file, page header number of cells, tokens, column count
+    database_file.seek(page_start + 8) # move to the cell pointer array on the current page
+    cell_pointers = [int.from_bytes(database_file.read(2), "big") for _ in range(page_header.number_of_cells)]
+
+    where_condition = get_where_condition(sql_tokens)
+
+    table_rows = []
+    for cell_pointer in cell_pointers:
+        database_file.seek(page_start + cell_pointer)
+        _number_of_bytes_in_payload = parse_varint(database_file)
+        rowid = parse_varint(database_file)
+        record = parse_record(database_file, column_count)
+
+        row_dict = {}
+        for i, column in enumerate(columns):
+            if column == 'id':
+                row_dict[column] = rowid
+            else:
+                row_dict[column] = record[i]
+        if where_condition:
+            if where_condition[0] == 'id':
+                if rowid == int(where_condition[1]):
+                    table_rows.append(row_dict)
+            else:
+                if row_dict[where_condition[0]].decode() == where_condition[1].strip('"').strip("'"):
+                    table_rows.append(row_dict)
+        else:
+            table_rows.append(row_dict)
+
+    return table_rows
 
 def get_table_columns(table_name, schema_rows):
     table_record = [record for record in sqlite_schema_rows if record['tbl_name'].decode() == table_name][0]
@@ -154,37 +229,9 @@ elif command.startswith('select'):
 
     with open(database_file_path, "rb") as database_file:
         page_start = table_record['rootpage'] * page_size - page_size
-        database_file.seek(page_start)
-        page_header = PageHeader.parse_from(database_file)
-        database_file.seek(page_start + 8) # move to the cell pointer array on the current page
-        cell_pointers = [int.from_bytes(database_file.read(2), "big") for _ in range(page_header.number_of_cells)]
 
-        where_condition = get_where_condition(sql_tokens)
-
-        table_rows = []
-        for cell_pointer in cell_pointers:
-            database_file.seek(page_start + cell_pointer)
-            _number_of_bytes_in_payload = parse_varint(database_file)
-            rowid = parse_varint(database_file)
-            record = parse_record(database_file, column_count)
-
-            row_dict = {}
-            for i, column in enumerate(columns):
-                if column == 'id':
-                    row_dict[column] = rowid
-                else:
-                    row_dict[column] = record[i]
-            if where_condition:
-                if where_condition[0] == 'id':
-                    if rowid == int(where_condition[1]):
-                        table_rows.append(row_dict)
-                else:
-                    if row_dict[where_condition[0]].decode() == where_condition[1].strip('"').strip("'"):
-                        table_rows.append(row_dict)
-            else:
-                table_rows.append(row_dict)
-
-
+        # return table rows
+        table_rows = read_pages(database_file, page_start, sql_tokens, column_count, page_size)
         identifiers = sql_tokens[2] 
 
         if type(identifiers) == Function:
@@ -206,16 +253,16 @@ elif command.startswith('select'):
             for row in table_rows:
                 output = ""
                 for col in columns_to_return:
-                    output += row[col].decode()
+                    datatype = type(row[col])
+                    if datatype == int:
+                        output += str(row[col])
+                    elif row[col] is None:
+                        output += ''
+                    else:
+                        output += row[col].decode()
                     output += '|'
                 output = output[:-1]
                 print(output)
 else:
     print(f"Invalid command: {command}")
 
-# column name
-# test 
-# value
-
-
-# the first identifier after from
