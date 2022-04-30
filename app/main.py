@@ -221,6 +221,7 @@ def read_from_index(database_file, page_number, page_size, value):
             # ignore teh rest of the keys in this node
             value_less_than_first = True
             if page_header.page_type == INTERIOR_INDEX_PAGE: 
+                print(record[0])
                 print('goes into left most')
                 rowids.extend(read_from_index(database_file, left_pointer, page_size, value))
                 break
