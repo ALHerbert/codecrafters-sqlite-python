@@ -340,6 +340,8 @@ def query_index(database_file, index_rootpage, page_size, value, columns, rootpa
     rowids = read_from_index(database_file, index_rootpage, page_size, value)
     table_rows = []
 
+    print('rowids', rowids)
+
     for rowid in rowids:
         row = search_by_rowid(database_file, rootpage, len(columns), page_size, rowid, columns) 
         table_rows.append(row)
