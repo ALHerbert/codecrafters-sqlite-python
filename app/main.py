@@ -78,8 +78,10 @@ class PageHeader:
         instance.start_of_content_area = int.from_bytes(database_file.read(2), "big")
         instance.fragmented_free_bytes = int.from_bytes(database_file.read(1), "big")
 
-        if instance.page_type == INTERIOR_TABLE_PAGE:
+        if instance.page_type in [INTERIOR_TABLE_PAGE, INTERIOR_INDEX_PAGE]:
             instance.right_most_pointer = int.from_bytes(database_file.read(4), "big")
+        else:
+            instance.right_most_pointer = None
 
         return instance
 
@@ -192,18 +194,186 @@ def get_table_columns(table_name, schema_rows):
         columns.append(column_name)
     return table_record, columns
 
-if command == ".dbinfo":
+def read_from_index(database_file, page_number, page_size, value):
+    page_start = page_number * page_size - page_size
+    database_file.seek(page_start)
+    page_header = PageHeader.parse_from(database_file)
+    if page_header.page_type == INTERIOR_INDEX_PAGE: 
+        database_file.seek(page_start + 12) 
+    elif page_header.page_type == LEAF_INDEX_PAGE:
+        database_file.seek(page_start + 8)
+    cell_pointers = [int.from_bytes(database_file.read(2), "big") for _ in range(page_header.number_of_cells)]
+    
+   
+    rowids = []
+    value_less_than_first = False
+    found_in_node = False
+    found_last = False # a match has been found and there exists an additional nonmatch
+
+    for i, cell_pointer in enumerate(cell_pointers):
+        database_file.seek(page_start + cell_pointer)
+        if page_header.page_type == INTERIOR_INDEX_PAGE: 
+            left_pointer = int.from_bytes(database_file.read(4), "big")
+        _number_of_bytes_in_payload = parse_varint(database_file)
+        record = parse_record(database_file, 2) # number of columns in the index + the one column for rowid
+
+        if i == 0 and record[0] > value: # first key in the node is greater than the value we're searching for
+            # ignore teh rest of the keys in this node
+            value_less_than_first = True
+            if page_header.page_type == INTERIOR_INDEX_PAGE: 
+                rowids.extend(read_from_index(database_file, left_pointer, page_size, value))
+                break
+            if page_header.page_type == LEAF_INDEX_PAGE: # if on leaf node, theres nowhere else to go
+                return [] 
+
+        if found_in_node and record[0] != value:
+            # we just passed the last matched value. go into the left pointer (which is right pointer of last match) but don't add rowid
+            found_last = True
+            if page_header.page_type == INTERIOR_INDEX_PAGE: 
+                rowids.extend(read_from_index(database_file, left_pointer, page_size, value))
+            break
+
+        if record[0] == value: # if match found, add rowid to list and then go into left pointer 
+            #go into left pointer
+            found_in_node = True
+            if page_header.page_type == INTERIOR_INDEX_PAGE: 
+                rowids.extend(read_from_index(database_file, left_pointer, page_size, value))
+            
+            rowids.append(record[1])
+            # we're not going to find the value in the rest of the list
+    if not value_less_than_first : # ignore the right pointer stuff completely if the left most pointer was used or if the value has alreayd been found in a parent node
+
+        # if we made it through the list without finding the value, go into the right most pointer
+        # we want to go into the right pointer when no matches are found or we found a match as the last item
+
+        if not found_in_node and page_header.page_type == INTERIOR_INDEX_PAGE:
+            rowids.extend(read_from_index(database_file, page_header.right_most_pointer, page_size, value))
+
+        if found_in_node and not found_last and page_header.page_type == INTERIOR_INDEX_PAGE:
+            rowids.extend(read_from_index(database_file, page_header.right_most_pointer, page_size, value))
+
+    # can an interior node not have a right most pointer?
+    return rowids
+
+    # need to check if its a leaf node or interior node. if leaf, we don't have to search any further
+def get_number_of_tables(schema_rows):
+    row_count = 0
+    for row in schema_rows:
+        if row['type'].decode() == 'table':
+            row_count += 1
+
+    return row_count
+
+def search_by_rowid(database_file, page_number, column_count, page_size, k, columns):
+
+
+    page_start = page_number * page_size - page_size 
+    database_file.seek(page_start)
+    page_header = PageHeader.parse_from(database_file)
+
+    if page_header.page_type == LEAF_TABLE_PAGE:
+        return read_leaf_by_by_rowid(database_file, page_start, page_header, column_count, page_size, k, columns)
+    elif page_header.page_type == INTERIOR_TABLE_PAGE:
+        return read_interior_page_by_rowid(database_file, page_start, page_header, column_count, page_size, k, columns)
+
+    else:
+        print("Unknown page type!", page_header.page_type)
+
+def read_interior_page_by_rowid(database_file, page_start, page_header, column_count, page_size, rowid, columns):
+    database_file.seek(page_start+12)
+    cell_pointers = [int.from_bytes(database_file.read(2), "big") for _ in range(page_header.number_of_cells)]
+
+    for cell_pointer in cell_pointers:
+        database_file.seek(page_start + cell_pointer)
+        page_number = int.from_bytes(database_file.read(4), "big") # left pointer
+        integer_key = parse_varint(database_file)
+
+        if rowid == integer_key:
+            # search the left
+            return search_by_rowid(database_file, page_number, column_count, page_size, rowid, columns)
+            #break
+
+        if rowid < integer_key: # this can only happen on the first iteration if the rowid exists
+            # search the left
+            return search_by_rowid(database_file, page_number, column_count, page_size, rowid, columns)
+            #break
+
+
+    # if nothing found search the right most pointer
+    return search_by_rowid(database_file, page_header.right_most_pointer, column_count, page_size, rowid, columns) 
+
+def read_leaf_by_by_rowid(database_file, page_start, page_header, column_count, page_size, k, columns):
+    database_file.seek(page_start + 8) # move to the cell pointer array on the current page
+    cell_pointers = [int.from_bytes(database_file.read(2), "big") for _ in range(page_header.number_of_cells)]
+
+    for cell_pointer in cell_pointers:
+        database_file.seek(page_start + cell_pointer)
+        _number_of_bytes_in_payload = parse_varint(database_file)
+        rowid = parse_varint(database_file)
+        record = parse_record(database_file, column_count)
+
+        if k == rowid:
+
+            row_dict = {}
+            for i, column in enumerate(columns):
+                if column == 'id':
+                    row_dict[column] = rowid
+                else:
+                    row_dict[column] = record[i]
+
+            return row_dict
+    # since this is a leaf, if the key isn't found in this node, return None
+    return None
+
+def get_indexes(sqlite_schema_rows):
+    import re 
+    indexes = {}
+    for row in sqlite_schema_rows:
+        if row['type'].decode() == 'index':
+            column = re.findall("\((.*?)\)", row['sql'].decode())[0]
+            indexes[(row['tbl_name'].decode(), column)] = row['rootpage']
+
+    return indexes
+
+def query_index(database_file, index_rootpage, page_size, value, columns, rootpage):
+    rowids = read_from_index(database_file, index_rootpage, page_size, value)
+    table_rows = []
+
+    for rowid in rowids:
+        row = search_by_rowid(database_file, rootpage, len(columns), page_size, rowid, columns) 
+        table_rows.append(row)
+
+    return table_rows  
+
+#import datetime
+
+#begin_time = datetime.datetime.now()
+
+if command == ".index":
+    page_size = get_page_size(database_file_path)
+    with open(database_file_path, "rb") as database_file:
+        rowids = read_from_index(database_file, 4, page_size, b'suriname')
+
+    print(len(rowids))
+elif command == ".find":
+    page_size = get_page_size(database_file_path)
+    sqlite_schema_rows = generate_schema_rows(database_file_path)
+    table_record, columns = get_table_columns('companies', sqlite_schema_rows)
+    with open(database_file_path, "rb") as database_file:
+        row = search_by_rowid(database_file, 2, 10, page_size, 966, columns)
+        print(row)
+elif command == ".dbinfo":
     sqlite_schema_rows = generate_schema_rows(database_file_path)
    # You can use print statements as follows for debugging, they'll be visible when running tests.
     print("Logs from your program will appear here!")
     # Uncomment this to pass the first stage
-    print(f"number of tables: {len(sqlite_schema_rows)}")
+    print(f"number of tables: {get_number_of_tables(sqlite_schema_rows)}")
 elif command == ".tables":
     sqlite_schema_rows = generate_schema_rows(database_file_path)
     output = ""
     for row in sqlite_schema_rows:
         tbl_name = row['tbl_name'].decode()
-        if tbl_name != 'sqlite_sequence':
+        if tbl_name != 'sqlite_sequence' and row['type'].decode() == 'table':
             output += tbl_name + ' '
     print(output)
 elif command.startswith('select') or command.startswith('SELECT'):
@@ -212,6 +382,7 @@ elif command.startswith('select') or command.startswith('SELECT'):
     table = get_tablename(sql_tokens)
 
     sqlite_schema_rows = generate_schema_rows(database_file_path)
+    indexes = get_indexes(sqlite_schema_rows)
     table_record, columns = get_table_columns(table, sqlite_schema_rows)
     column_count = len(columns) 
 
@@ -221,7 +392,13 @@ elif command.startswith('select') or command.startswith('SELECT'):
         page_start = table_record['rootpage'] * page_size - page_size
 
         # return table rows
-        table_rows = read_pages(database_file, page_start, sql_tokens, column_count, page_size)
+        # if where clause uses index, search there instead
+        where_condition = get_where_condition(sql_tokens)
+        if where_condition and (table, where_condition[0]) in indexes:
+            index_rootpage = indexes[table, where_condition[0]]
+            table_rows = query_index(database_file, index_rootpage, page_size, where_condition[1].strip('"').strip("'").encode(), columns, table_record['rootpage'])
+        else:
+            table_rows = read_pages(database_file, page_start, sql_tokens, column_count, page_size)
         identifiers = sql_tokens[2] 
 
         if type(identifiers) == Function:
@@ -259,3 +436,4 @@ elif command.startswith('select') or command.startswith('SELECT'):
 else:
     print(f"Invalid command: {command}")
 
+#print(datetime.datetime.now() - begin_time)
