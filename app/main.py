@@ -249,6 +249,7 @@ def read_from_index(database_file, page_number, page_size, value):
         # we want to go into the right pointer when no matches are found or we found a match as the last item
 
         if not found_in_node and page_header.page_type == INTERIOR_INDEX_PAGE:
+            print('goes into right most node')
             rowids.extend(read_from_index(database_file, page_header.right_most_pointer, page_size, value))
 
         if found_in_node and not found_last and page_header.page_type == INTERIOR_INDEX_PAGE:
