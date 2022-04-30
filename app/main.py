@@ -210,7 +210,7 @@ def read_from_index(database_file, page_number, page_size, value):
     found_in_node = False
     found_last = False # a match has been found and there exists an additional nonmatch
 
-    print('cell pointer length', len(cell_pointers))
+    print('value', value)
 
     for i, cell_pointer in enumerate(cell_pointers):
         database_file.seek(page_start + cell_pointer)
