@@ -210,8 +210,6 @@ def read_from_index(database_file, page_number, page_size, value):
     found_in_node = False
     found_last = False # a match has been found and there exists an additional nonmatch
 
-    print('value', value)
-
     for i, cell_pointer in enumerate(cell_pointers):
         database_file.seek(page_start + cell_pointer)
         if page_header.page_type == INTERIOR_INDEX_PAGE: 
@@ -223,6 +221,7 @@ def read_from_index(database_file, page_number, page_size, value):
             # ignore teh rest of the keys in this node
             value_less_than_first = True
             if page_header.page_type == INTERIOR_INDEX_PAGE: 
+                print('goes into left most')
                 rowids.extend(read_from_index(database_file, left_pointer, page_size, value))
                 break
             if page_header.page_type == LEAF_INDEX_PAGE: # if on leaf node, theres nowhere else to go
