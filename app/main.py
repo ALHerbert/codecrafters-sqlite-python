@@ -217,7 +217,7 @@ def read_from_index(database_file, page_number, page_size, value):
         _number_of_bytes_in_payload = parse_varint(database_file)
         record = parse_record(database_file, 2) # number of columns in the index + the one column for rowid
 
-        if i == 0 and record[0] > value: # first key in the node is greater than the value we're searching for
+        if i == 0 and record[0] and record[0] > value: # first key in the node is greater than the value we're searching for
             # ignore teh rest of the keys in this node
             value_less_than_first = True
             if page_header.page_type == INTERIOR_INDEX_PAGE: 
