@@ -340,6 +340,7 @@ def query_index(database_file, index_rootpage, page_size, value, columns, rootpa
     rowids = read_from_index(database_file, index_rootpage, page_size, value)
     table_rows = []
 
+    print('country' value)
     print('rowids', rowids)
 
     for rowid in rowids:
