@@ -210,6 +210,8 @@ def read_from_index(database_file, page_number, page_size, value):
     found_in_node = False
     found_last = False # a match has been found and there exists an additional nonmatch
 
+    print('cell pointer length', len(cell_pointers))
+
     for i, cell_pointer in enumerate(cell_pointers):
         database_file.seek(page_start + cell_pointer)
         if page_header.page_type == INTERIOR_INDEX_PAGE: 
@@ -340,9 +342,6 @@ def query_index(database_file, index_rootpage, page_size, value, columns, rootpa
     rowids = read_from_index(database_file, index_rootpage, page_size, value)
     table_rows = []
 
-    print('country', value)
-    print('rowids', rowids)
-
     for rowid in rowids:
         row = search_by_rowid(database_file, rootpage, len(columns), page_size, rowid, columns) 
         table_rows.append(row)
@@ -353,20 +352,7 @@ def query_index(database_file, index_rootpage, page_size, value, columns, rootpa
 
 #begin_time = datetime.datetime.now()
 
-if command == ".index":
-    page_size = get_page_size(database_file_path)
-    with open(database_file_path, "rb") as database_file:
-        rowids = read_from_index(database_file, 4, page_size, b'suriname')
-
-    print(len(rowids))
-elif command == ".find":
-    page_size = get_page_size(database_file_path)
-    sqlite_schema_rows = generate_schema_rows(database_file_path)
-    table_record, columns = get_table_columns('companies', sqlite_schema_rows)
-    with open(database_file_path, "rb") as database_file:
-        row = search_by_rowid(database_file, 2, 10, page_size, 966, columns)
-        print(row)
-elif command == ".dbinfo":
+if command == ".dbinfo":
     sqlite_schema_rows = generate_schema_rows(database_file_path)
    # You can use print statements as follows for debugging, they'll be visible when running tests.
     print("Logs from your program will appear here!")
