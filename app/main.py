@@ -330,9 +330,9 @@ def get_indexes(sqlite_schema_rows):
     indexes = {}
     for row in sqlite_schema_rows:
         if row['type'].decode() == 'index':
-            print(row)
-            column = re.findall("\((.*?)\)", row['sql'].decode())[0]
-            indexes[(row['tbl_name'].decode(), column)] = row['rootpage']
+            if row['sql']:
+                column = re.findall("\((.*?)\)", row['sql'].decode())[0]
+                indexes[(row['tbl_name'].decode(), column)] = row['rootpage']
 
     return indexes
 
