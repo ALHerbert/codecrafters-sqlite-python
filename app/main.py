@@ -233,7 +233,7 @@ def read_from_index(database_file, page_number, page_size, value):
                 rowids.extend(read_from_index(database_file, left_pointer, page_size, value))
             break
 
-        if record[0] <= value:
+        if record[0] and record[0] <= value:
             if record[0] == value: # if match found, add rowid to list and then go into left pointer 
                 #go into left pointer
                 found_in_node = True
