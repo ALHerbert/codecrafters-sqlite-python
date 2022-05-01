@@ -216,6 +216,7 @@ def read_from_index(database_file, page_number, page_size, value):
             left_pointer = int.from_bytes(database_file.read(4), "big")
         _number_of_bytes_in_payload = parse_varint(database_file)
         record = parse_record(database_file, 2) # number of columns in the index + the one column for rowid
+        print(record[0])
 
         if i == 0:
             print('left most record: ', record[0]) 
