@@ -29,6 +29,8 @@ def parse_column_value(stream, serial_type):
         return int.from_bytes(stream.read(2), "big")
     elif serial_type == 3:
         return int.from_bytes(stream.read(3), "big")
+    elif serial_type == 8:
+        return int(0)
     elif serial_type == 9:
         return int(1)
     else:
