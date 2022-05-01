@@ -216,17 +216,11 @@ def read_from_index(database_file, page_number, page_size, value):
             left_pointer = int.from_bytes(database_file.read(4), "big")
         _number_of_bytes_in_payload = parse_varint(database_file)
         record = parse_record(database_file, 2) # number of columns in the index + the one column for rowid
-        print(record[0])
-
-        if i == 0:
-            print('left most record: ', record[0]) 
 
         if i == 0 and record[0] and record[0] > value: # first key in the node is greater than the value we're searching for
             # ignore teh rest of the keys in this node
             value_less_than_first = True
             if page_header.page_type == INTERIOR_INDEX_PAGE: 
-                print(record[0])
-                print('goes into left most')
                 rowids.extend(read_from_index(database_file, left_pointer, page_size, value))
                 break
             if page_header.page_type == LEAF_INDEX_PAGE: # if on leaf node, theres nowhere else to go
@@ -239,13 +233,17 @@ def read_from_index(database_file, page_number, page_size, value):
                 rowids.extend(read_from_index(database_file, left_pointer, page_size, value))
             break
 
-        if record[0] == value: # if match found, add rowid to list and then go into left pointer 
-            #go into left pointer
-            found_in_node = True
-            if page_header.page_type == INTERIOR_INDEX_PAGE: 
-                rowids.extend(read_from_index(database_file, left_pointer, page_size, value))
-            
-            rowids.append(record[1])
+        if record[0] <= value:
+            if record[0] == value: # if match found, add rowid to list and then go into left pointer 
+                #go into left pointer
+                found_in_node = True
+                if page_header.page_type == INTERIOR_INDEX_PAGE: 
+                    rowids.extend(read_from_index(database_file, left_pointer, page_size, value))
+                
+                rowids.append(record[1])
+            else:
+                if page_header.page_type == INTERIOR_INDEX_PAGE: 
+                    rowids.extend(read_from_index(database_file, left_pointer, page_size, value))
             # we're not going to find the value in the rest of the list
     if not value_less_than_first : # ignore the right pointer stuff completely if the left most pointer was used or if the value has alreayd been found in a parent node
 
@@ -253,7 +251,6 @@ def read_from_index(database_file, page_number, page_size, value):
         # we want to go into the right pointer when no matches are found or we found a match as the last item
 
         if not found_in_node and page_header.page_type == INTERIOR_INDEX_PAGE:
-            print('goes into right most node')
             rowids.extend(read_from_index(database_file, page_header.right_most_pointer, page_size, value))
 
         if found_in_node and not found_last and page_header.page_type == INTERIOR_INDEX_PAGE:
@@ -295,7 +292,7 @@ def read_interior_page_by_rowid(database_file, page_start, page_header, column_c
         page_number = int.from_bytes(database_file.read(4), "big") # left pointer
         integer_key = parse_varint(database_file)
 
-        if rowid == integer_key:
+        if rowid >= integer_key:
             # search the left
             return search_by_rowid(database_file, page_number, column_count, page_size, rowid, columns)
             #break
