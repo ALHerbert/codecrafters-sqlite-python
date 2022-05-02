@@ -230,8 +230,8 @@ def read_from_index(database_file, page_number, page_size, value):
         if found_in_node and record[0] != value:
             # we just passed the last matched value. go into the left pointer (which is right pointer of last match) but don't add rowid
             found_last = True
-            if page_header.page_type == INTERIOR_INDEX_PAGE: 
-                rowids.extend(read_from_index(database_file, left_pointer, page_size, value))
+            #if page_header.page_type == INTERIOR_INDEX_PAGE: 
+            #    rowids.extend(read_from_index(database_file, left_pointer, page_size, value))
             break
 
         if record[0] and record[0] >= value:
@@ -248,6 +248,8 @@ def read_from_index(database_file, page_number, page_size, value):
 
                 if page_header.page_type == INTERIOR_INDEX_PAGE: 
                     rowids.extend(read_from_index(database_file, left_pointer, page_size, value))
+                
+                break
             # we're not going to find the value in the rest of the list
     if not value_less_than_first : # ignore the right pointer stuff completely if the left most pointer was used or if the value has alreayd been found in a parent node
 
