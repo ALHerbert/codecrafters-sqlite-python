@@ -1,19 +1,17 @@
+import re 
 import sys
-
 from dataclasses import dataclass
 
 import sqlparse 
-
 from sqlparse.sql import IdentifierList, Function, Identifier, Comparison, Where
+
 from .record_parser import parse_record
 from .varint_parser import parse_varint
 
-# constants
 INTERIOR_INDEX_PAGE = 2
 INTERIOR_TABLE_PAGE = 5
 LEAF_INDEX_PAGE = 10
 LEAF_TABLE_PAGE = 13
-
 
 database_file_path = sys.argv[1]
 command = sys.argv[2]
@@ -336,7 +334,6 @@ def read_leaf_by_by_rowid(database_file, page_start, page_header, column_count, 
     return None
 
 def get_indexes(sqlite_schema_rows):
-    import re 
     indexes = {}
     for row in sqlite_schema_rows:
         if row['type'].decode() == 'index':
