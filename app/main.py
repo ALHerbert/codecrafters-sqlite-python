@@ -218,22 +218,10 @@ def read_from_index(database_file, page_number, page_size, value):
             left_pointer = int.from_bytes(database_file.read(4), "big")
         _number_of_bytes_in_payload = parse_varint(database_file)
         record = parse_record(database_file, 2) # number of columns in the index + the one column for rowid
-        '''
-        if i == 0 and record[0] and record[0] > value: # first key in the node is greater than the value we're searching for
-            # ignore teh rest of the keys in this node
-            value_less_than_first = True
-            if page_header.page_type == INTERIOR_INDEX_PAGE: 
-                rowids.extend(read_from_index(database_file, left_pointer, page_size, value))
-                break
-            if page_header.page_type == LEAF_INDEX_PAGE: # if on leaf node, theres nowhere else to go
-                return [] 
-        '''
 
         if found_in_node and record[0] != value:
             # we just passed the last matched value. go into the left pointer (which is right pointer of last match) but don't add rowid
             found_last = True
-            #if page_header.page_type == INTERIOR_INDEX_PAGE: 
-            #    rowids.extend(read_from_index(database_file, left_pointer, page_size, value))
             break
 
         if record[0] and record[0] >= value:
@@ -303,13 +291,6 @@ def read_interior_page_by_rowid(database_file, page_start, page_header, column_c
         if rowid <= integer_key:
             # search the left
             return search_by_rowid(database_file, page_number, column_count, page_size, rowid, columns)
-            #break
-
-        #if rowid < integer_key: # this can only happen on the first iteration if the rowid exists
-        #    # search the left
-        #    return search_by_rowid(database_file, page_number, column_count, page_size, rowid, columns)
-        #    #break
-
 
     # if nothing found search the right most pointer
     return search_by_rowid(database_file, page_header.right_most_pointer, column_count, page_size, rowid, columns) 
