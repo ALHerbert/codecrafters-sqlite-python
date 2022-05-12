@@ -8,6 +8,10 @@ from sqlparse.sql import IdentifierList, Function, Identifier, Comparison, Where
 from .record_parser import parse_record
 from .varint_parser import parse_varint
 
+DATABASE_HEADER_LENGTH = 100
+LEAF_HEADER_LENGTH = 8
+INTERIOR_HEADER_LENGTH = 12
+
 INTERIOR_INDEX_PAGE = 2
 INTERIOR_TABLE_PAGE = 5
 LEAF_INDEX_PAGE = 10
@@ -91,9 +95,9 @@ def get_page_size(database_path):
 
 def generate_schema_rows(database_path):
     with open(database_path, "rb") as database_file:
-        database_file.seek(100)  # Skip the header section
+        database_file.seek(DATABASE_HEADER_LENGTH)  # Skip the header section
         page_header = PageHeader.parse_from(database_file)
-        database_file.seek(100+8)  # Skip the database header & b-tree page header, get to the cell pointer array
+        database_file.seek(DATABASE_HEADER_LENGTH + LEAF_HEADER_LENGTH)  # Skip the database header & b-tree page header, get to the cell pointer array
         
         cell_pointers = [int.from_bytes(database_file.read(2), "big") for _ in range(page_header.number_of_cells)]
         sqlite_schema_rows = []
@@ -134,7 +138,7 @@ def read_pages(database_file, page_start, sql_tokens, column_count, page_size):
     return table_rows
 
 def read_interior_page(database_file, page_start, page_header, sql_tokens, column_count, page_size):
-    database_file.seek(page_start+12)
+    database_file.seek(page_start+ INTERIOR_HEADER_LENGTH)
     cell_pointers = [int.from_bytes(database_file.read(2), "big") for _ in range(page_header.number_of_cells)]
 
     table_rows = []
@@ -150,7 +154,7 @@ def read_interior_page(database_file, page_start, page_header, sql_tokens, colum
 
 def get_table_rows(database_file, page_start, page_header, sql_tokens, column_count, page_size):
     # begin function - page start, database file, page header number of cells, tokens, column count
-    database_file.seek(page_start + 8) # move to the cell pointer array on the current page
+    database_file.seek(page_start + LEAF_HEADER_LENGTH) # move to the cell pointer array on the current page
     cell_pointers = [int.from_bytes(database_file.read(2), "big") for _ in range(page_header.number_of_cells)]
 
     where_condition = get_where_condition(sql_tokens)
@@ -197,9 +201,9 @@ def read_from_index(database_file, page_number, page_size, value):
     database_file.seek(page_start)
     page_header = PageHeader.parse_from(database_file)
     if page_header.page_type == INTERIOR_INDEX_PAGE: 
-        database_file.seek(page_start + 12) 
+        database_file.seek(page_start + INTERIOR_HEADER_LENGTH) 
     elif page_header.page_type == LEAF_INDEX_PAGE:
-        database_file.seek(page_start + 8)
+        database_file.seek(page_start + LEAF_HEADER_LENGTH)
     cell_pointers = [int.from_bytes(database_file.read(2), "big") for _ in range(page_header.number_of_cells)]
     
    
@@ -288,7 +292,7 @@ def search_by_rowid(database_file, page_number, column_count, page_size, k, colu
         print("Unknown page type!", page_header.page_type)
 
 def read_interior_page_by_rowid(database_file, page_start, page_header, column_count, page_size, rowid, columns):
-    database_file.seek(page_start+12)
+    database_file.seek(page_start+ INTERIOR_HEADER_LENGTH)
     cell_pointers = [int.from_bytes(database_file.read(2), "big") for _ in range(page_header.number_of_cells)]
 
     for cell_pointer in cell_pointers:
@@ -311,7 +315,7 @@ def read_interior_page_by_rowid(database_file, page_start, page_header, column_c
     return search_by_rowid(database_file, page_header.right_most_pointer, column_count, page_size, rowid, columns) 
 
 def read_leaf_by_by_rowid(database_file, page_start, page_header, column_count, page_size, k, columns):
-    database_file.seek(page_start + 8) # move to the cell pointer array on the current page
+    database_file.seek(page_start + LEAF_HEADER_LENGTH) # move to the cell pointer array on the current page
     cell_pointers = [int.from_bytes(database_file.read(2), "big") for _ in range(page_header.number_of_cells)]
 
     for cell_pointer in cell_pointers:
