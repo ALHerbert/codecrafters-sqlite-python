@@ -356,10 +356,6 @@ def query_index(database_file, index_rootpage, page_size, value, columns, rootpa
 
     return table_rows  
 
-#import datetime
-
-#begin_time = datetime.datetime.now()
-
 if command == ".dbinfo":
     sqlite_schema_rows = generate_schema_rows(database_file_path)
    # You can use print statements as follows for debugging, they'll be visible when running tests.
@@ -434,4 +430,3 @@ elif command.startswith('select') or command.startswith('SELECT'):
 else:
     print(f"Invalid command: {command}")
 
-#print(datetime.datetime.now() - begin_time)
