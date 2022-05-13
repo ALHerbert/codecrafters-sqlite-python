@@ -87,12 +87,6 @@ class PageHeader:
 
         return instance
 
-def get_page_size(database_path):
-    with open(database_path, "rb") as database_file:
-        database_file.seek(16)
-        page_size = int.from_bytes(database_file.read(2), "big")
-        return page_size
-
 def generate_schema_rows(database_path):
     with open(database_path, "rb") as database_file:
         database_file.seek(DATABASE_HEADER_LENGTH)  # Skip the header section
@@ -362,9 +356,10 @@ elif command.startswith('select') or command.startswith('SELECT'):
     table_record, columns = get_table_columns(table, sqlite_schema_rows)
     column_count = len(columns) 
 
-    page_size = get_page_size(database_file_path)
-
     with open(database_file_path, "rb") as database_file:
+        database_file.seek(16)
+        page_size = int.from_bytes(database_file.read(2), "big")
+
         page_start = table_record['rootpage'] * page_size - page_size
 
         # return table rows
