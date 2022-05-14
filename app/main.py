@@ -17,9 +17,6 @@ INTERIOR_TABLE_PAGE = 5
 LEAF_INDEX_PAGE = 10
 LEAF_TABLE_PAGE = 13
 
-database_file_path = sys.argv[1]
-command = sys.argv[2]
-
 
 def get_tablename(tokens):
     # returns the first instance of identifer after the from keyword
@@ -178,7 +175,7 @@ def get_table_rows(database_file, page_start, page_header, sql_tokens, column_co
 
     return table_rows
 
-def get_table_columns(table_name, schema_rows):
+def get_table_columns(table_name, sqlite_schema_rows):
     table_record = [record for record in sqlite_schema_rows if record['tbl_name'].decode() == table_name][0]
     table_sql = table_record['sql'].decode()
 
@@ -332,13 +329,14 @@ def query_index(database_file, index_rootpage, page_size, value, columns, rootpa
 
     return table_rows  
 
-if command == ".dbinfo":
+def command_dot_dbinfo(database_file_path):
     sqlite_schema_rows = generate_schema_rows(database_file_path)
    # You can use print statements as follows for debugging, they'll be visible when running tests.
     print("Logs from your program will appear here!")
     # Uncomment this to pass the first stage
     print(f"number of tables: {get_number_of_tables(sqlite_schema_rows)}")
-elif command == ".tables":
+
+def command_dot_tables(database_file_path):
     sqlite_schema_rows = generate_schema_rows(database_file_path)
     output = ""
     for row in sqlite_schema_rows:
@@ -346,7 +344,8 @@ elif command == ".tables":
         if tbl_name != 'sqlite_sequence' and row['type'].decode() == 'table':
             output += tbl_name + ' '
     print(output)
-elif command.startswith('select') or command.startswith('SELECT'):
+
+def select_statement(database_file_path):
     sql_tokens = sqlparse.parse(command)[0].tokens
 
     table = get_tablename(sql_tokens)
@@ -404,6 +403,17 @@ elif command.startswith('select') or command.startswith('SELECT'):
                     output += '|'
                 output = output[:-1]
                 print(output)
-else:
-    print(f"Invalid command: {command}")
+
+if __name__ == "__main__":
+    database_file_path = sys.argv[1]
+    command = sys.argv[2]
+
+    if command == ".dbinfo":
+        command_dot_dbinfo(database_file_path)
+    elif command == ".tables":
+        command_dot_tables(database_file_path)
+    elif command.lower().startswith('select'):
+        select_statement(database_file_path)
+    else:
+        print(f"Invalid command: {command}")
 
