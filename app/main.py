@@ -111,24 +111,24 @@ def generate_schema_rows(database_path):
 
         return sqlite_schema_rows
 
-def read_pages(database_file, page_start, sql_tokens, column_count, page_size):
+def read_pages(database_file, page_start, sql_tokens, column_count, page_size, columns):
     database_file.seek(page_start)
     page_header = PageHeader.parse_from(database_file)
 
     table_rows = []
     if page_header.page_type == LEAF_TABLE_PAGE:
-        table_rows.extend(get_table_rows(database_file, page_start, page_header, sql_tokens, column_count, page_size))
+        table_rows.extend(get_table_rows(database_file, page_start, page_header, sql_tokens, column_count, page_size, columns))
     elif page_header.page_type == INTERIOR_TABLE_PAGE:
-        table_rows.extend(read_interior_page(database_file, page_start, page_header, sql_tokens, column_count, page_size))
+        table_rows.extend(read_interior_page(database_file, page_start, page_header, sql_tokens, column_count, page_size, columns))
         right_page_number = page_header.right_most_pointer * page_size - page_size
-        table_rows.extend(read_pages(database_file, right_page_number, sql_tokens, column_count, page_size))
+        table_rows.extend(read_pages(database_file, right_page_number, sql_tokens, column_count, page_size, columns))
 
     else:
         print("Unknown page type!", page_header.page_type)
 
     return table_rows
 
-def read_interior_page(database_file, page_start, page_header, sql_tokens, column_count, page_size):
+def read_interior_page(database_file, page_start, page_header, sql_tokens, column_count, page_size, columns):
     database_file.seek(page_start+ INTERIOR_HEADER_LENGTH)
     cell_pointers = [int.from_bytes(database_file.read(2), "big") for _ in range(page_header.number_of_cells)]
 
@@ -139,11 +139,11 @@ def read_interior_page(database_file, page_start, page_header, sql_tokens, colum
         _varint_integer_key = parse_varint(database_file)
 
         new_page_start = page_number * page_size - page_size
-        table_rows.extend(read_pages(database_file, new_page_start, sql_tokens, column_count, page_size)) 
+        table_rows.extend(read_pages(database_file, new_page_start, sql_tokens, column_count, page_size, columns)) 
 
     return table_rows
 
-def get_table_rows(database_file, page_start, page_header, sql_tokens, column_count, page_size):
+def get_table_rows(database_file, page_start, page_header, sql_tokens, column_count, page_size, columns):
     # begin function - page start, database file, page header number of cells, tokens, column count
     database_file.seek(page_start + LEAF_HEADER_LENGTH) # move to the cell pointer array on the current page
     cell_pointers = [int.from_bytes(database_file.read(2), "big") for _ in range(page_header.number_of_cells)]
@@ -368,7 +368,7 @@ def select_statement(database_file_path):
             index_rootpage = indexes[table, where_condition[0]]
             table_rows = query_index(database_file, index_rootpage, page_size, where_condition[1].strip('"').strip("'").encode(), columns, table_record['rootpage'])
         else:
-            table_rows = read_pages(database_file, page_start, sql_tokens, column_count, page_size)
+            table_rows = read_pages(database_file, page_start, sql_tokens, column_count, page_size, columns)
         identifiers = sql_tokens[2] 
 
         if type(identifiers) == Function:
