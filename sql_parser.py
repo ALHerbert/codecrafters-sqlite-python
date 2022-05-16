@@ -60,7 +60,6 @@ def parse(statement):
     identifiers = sql_tokens[2] 
     if type(identifiers) == Function:
         # count
-        print(len(table_rows))
         columns.append({'type': 'function'})
 
     elif type(identifiers) == Identifier:
