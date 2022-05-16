@@ -7,6 +7,7 @@ from sqlparse.sql import IdentifierList, Function, Identifier, Comparison, Where
 
 from .record_parser import parse_record
 from .varint_parser import parse_varint
+from sql_parser import parse
 
 DATABASE_HEADER_LENGTH = 100
 LEAF_HEADER_LENGTH = 8
@@ -16,18 +17,6 @@ INTERIOR_INDEX_PAGE = 2
 INTERIOR_TABLE_PAGE = 5
 LEAF_INDEX_PAGE = 10
 LEAF_TABLE_PAGE = 13
-
-
-def get_tablename(tokens):
-    # returns the first instance of identifer after the from keyword
-
-    from_clause_reached = False 
-    for token in tokens:
-        if token.value.lower() == 'from':
-            from_clause_reached = True
-        if from_clause_reached:
-            if type(token) == Identifier:
-                return token.value
 
 def get_where_clause(tokens):
     for token in tokens:
@@ -348,7 +337,9 @@ def command_dot_tables(database_file_path):
 def select_statement(database_file_path):
     sql_tokens = sqlparse.parse(command)[0].tokens
 
-    table = get_tablename(sql_tokens)
+    sql_ast = parse(command)
+
+    table = sql_ast["from"][0]["table"]
 
     sqlite_schema_rows = generate_schema_rows(database_file_path)
     indexes = get_indexes(sqlite_schema_rows)
@@ -374,32 +365,19 @@ def select_statement(database_file_path):
         if type(identifiers) == Function:
             # count
             print(len(table_rows))
-        elif type(identifiers) == Identifier:
-            for row in table_rows:
-                if type(row[identifiers.value]) == int:
-                    print(str(row[identifiers.value]))
-                else:
-                    print(row[identifiers.value].decode())
-        elif type(identifiers) == IdentifierList:  
-            # select statement with columsn
-
-            # get the names of all the columns
-            columns_to_return = []
-            for token in identifiers:
-                if type(token) == Identifier:
-                    columns_to_return.append(token.value)
-
-            # construct a row
+        else:
             for row in table_rows:
                 output = ""
-                for col in columns_to_return:
-                    datatype = type(row[col])
+                for col in sql_ast["columns"]:
+                    # if type == column_ref
+                    data = row[col["expr"]["column"]]
+                    datatype = type(data)
                     if datatype == int:
-                        output += str(row[col])
-                    elif row[col] is None:
-                        output += ''
+                        output += str(data)
+                    elif data is None:
+                        output += ""
                     else:
-                        output += row[col].decode()
+                        output += data.decode()
                     output += '|'
                 output = output[:-1]
                 print(output)
