@@ -7,8 +7,13 @@ ast = {
     'from': [{'table': ''}],
     'where': {'type': 'binary_expr', 'operator': '=', left: {'type': 'column_ref', 'column': 'id'}, right: {'type': 'number', value: 1}} # this entire thing is a binary expression. row is compared against this. type can also be string or single quote string 
 }
+{
+  type: 'aggr_func',
+  name: 'COUNT',
+  args: { expr: { type: 'star', value: '*' } },
+  over: null
+}
 '''
-
 import sqlparse 
 from sqlparse.sql import IdentifierList, Function, Identifier, Comparison, Where
 
@@ -60,8 +65,7 @@ def parse(statement):
     identifiers = sql_tokens[2] 
     if type(identifiers) == Function:
         # count
-        columns.append({'type': 'function'})
-
+        columns.append({'type': 'aggr_func', 'name': 'COUNT', { 'expr': { 'type': 'star', 'value': '*' }})
     elif type(identifiers) == Identifier:
         columns.append({'expr': {'type': 'column_ref', 'column': identifiers.value}})
     elif type(identifiers) == IdentifierList:  
