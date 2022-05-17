@@ -65,7 +65,7 @@ def parse(statement):
     identifiers = sql_tokens[2] 
     if type(identifiers) == Function:
         # count
-        columns.append({'type': 'aggr_func', 'name': 'COUNT', { 'expr': { 'type': 'star', 'value': '*' }})
+        columns.append({'type': 'aggr_func', 'name': 'COUNT', 'args':{ 'expr': { 'type': 'star', 'value': '*' }}})
     elif type(identifiers) == Identifier:
         columns.append({'expr': {'type': 'column_ref', 'column': identifiers.value}})
     elif type(identifiers) == IdentifierList:  
